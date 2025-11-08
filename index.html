@@ -44,7 +44,7 @@
             gap: 10px;
         }
         
-        .refresh-btn, .clear-btn {
+        .refresh-btn {
             background-color: #4CAF50;
             color: white;
             border: none;
@@ -56,14 +56,6 @@
         
         .refresh-btn:hover {
             background-color: #45a049;
-        }
-        
-        .clear-btn {
-            background-color: #f44336;
-        }
-        
-        .clear-btn:hover {
-            background-color: #da190b;
         }
         
         /* Tabs */
@@ -208,6 +200,33 @@
             background-color: rgba(33, 150, 243, 0.2);
             color: #2196F3;
         }
+        
+        .action-btn {
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 2px;
+        }
+        
+        .btn-employee {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .btn-employee:hover {
+            background-color: #45a049;
+        }
+        
+        .btn-citizen {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        .btn-citizen:hover {
+            background-color: #1976D2;
+        }
     </style>
 </head>
 <body>
@@ -223,14 +242,13 @@
         
         <div class="button-group">
             <button class="refresh-btn" onclick="loadData()">🔄 Refresh Data</button>
-            <button class="clear-btn" onclick="confirmClearLog()">🗑️ Clear Entry Log</button>
         </div>
         
         <!-- Tabs -->
         <div class="tabs">
-            <button class="tab active" onclick="showTab('entry-log')">📋 Entry Log</button>
-            <button class="tab" onclick="showTab('registered')">✅ Registered Cards</button>
-            <button class="tab" onclick="showTab('unregistered')">❌ Unregistered Cards</button>
+            <button class="tab active" onclick="showTab(event, 'entry-log')">📋 Entry Log</button>
+            <button class="tab" onclick="showTab(event, 'registered')">✅ Registered Cards</button>
+            <button class="tab" onclick="showTab(event, 'unregistered')">❌ Unregistered Cards</button>
         </div>
         
         <div id="errorMessage"></div>
@@ -269,7 +287,7 @@
             setInterval(loadData, 15000);
         };
         
-        function showTab(tabName) {
+        function showTab(event, tabName) {
             // Hide all tabs
             const tabs = document.querySelectorAll('.tab-content');
             tabs.forEach(tab => tab.classList.remove('active'));
@@ -330,13 +348,14 @@
                 const date = new Date(entry.created_at);
                 const accessType = getAccessType(entry.field3);
                 const accessClass = getAccessClass(entry.field3);
+                const cardID = entry.field4 ? entry.field4.toUpperCase() : '-';
                 
                 tableHTML += `
                     <tr>
                         <td>${entry.entry_id}</td>
                         <td>${date.toLocaleString()}</td>
                         <td class="${accessClass}">${accessType}</td>
-                        <td>${entry.field4 || '-'}</td>
+                        <td>${cardID}</td>
                     </tr>
                 `;
             });
@@ -354,21 +373,24 @@
             
             allFeeds.forEach(entry => {
                 if (entry.field3 === '1' || entry.field3 === '2') {
-                    const cardID = entry.field4;
+                    const cardID = entry.field4 ? entry.field4.toUpperCase() : '';
                     const accessType = entry.field3;
                     
-                    if (!registeredCards[cardID]) {
+                    if (cardID && !registeredCards[cardID]) {
                         registeredCards[cardID] = {
                             type: accessType,
                             lastSeen: entry.created_at,
                             count: 0
                         };
                     }
-                    registeredCards[cardID].count++;
                     
-                    if (new Date(entry.created_at) > new Date(registeredCards[cardID].lastSeen)) {
-                        registeredCards[cardID].lastSeen = entry.created_at;
-                        registeredCards[cardID].type = accessType;
+                    if (cardID) {
+                        registeredCards[cardID].count++;
+                        
+                        if (new Date(entry.created_at) > new Date(registeredCards[cardID].lastSeen)) {
+                            registeredCards[cardID].lastSeen = entry.created_at;
+                            registeredCards[cardID].type = accessType;
+                        }
                     }
                 }
             });
@@ -422,18 +444,21 @@
             
             allFeeds.forEach(entry => {
                 if (entry.field3 === '0') {
-                    const cardID = entry.field4;
+                    const cardID = entry.field4 ? entry.field4.toUpperCase() : '';
                     
-                    if (!unregisteredCards[cardID]) {
+                    if (cardID && !unregisteredCards[cardID]) {
                         unregisteredCards[cardID] = {
                             lastSeen: entry.created_at,
                             count: 0
                         };
                     }
-                    unregisteredCards[cardID].count++;
                     
-                    if (new Date(entry.created_at) > new Date(unregisteredCards[cardID].lastSeen)) {
-                        unregisteredCards[cardID].lastSeen = entry.created_at;
+                    if (cardID) {
+                        unregisteredCards[cardID].count++;
+                        
+                        if (new Date(entry.created_at) > new Date(unregisteredCards[cardID].lastSeen)) {
+                            unregisteredCards[cardID].lastSeen = entry.created_at;
+                        }
                     }
                 }
             });
@@ -466,12 +491,10 @@
                         <td>${date.toLocaleString()}</td>
                         <td class="unauthorized">${info.count}</td>
                         <td>
-                            <button onclick="copyToClipboard('ADD_EMPLOYEE:${cardID}')" 
-                                    style="background:#4CAF50; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">
+                            <button onclick="copyToClipboard('ADD_EMPLOYEE:${cardID}')" class="action-btn btn-employee">
                                 Copy Employee Command
                             </button>
-                            <button onclick="copyToClipboard('ADD_CITIZEN:${cardID}')" 
-                                    style="background:#2196F3; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; margin-left:5px;">
+                            <button onclick="copyToClipboard('ADD_CITIZEN:${cardID}')" class="action-btn btn-citizen">
                                 Copy Citizen Command
                             </button>
                         </td>
@@ -503,20 +526,10 @@
         
         function copyToClipboard(text) {
             navigator.clipboard.writeText(text).then(() => {
-                alert('Command copied! Paste it in TalkBack:\n' + text);
+                alert('✅ Command copied to clipboard!\n\nPaste it in TalkBack:\n' + text);
+            }).catch(err => {
+                alert('⚠️ Could not copy command:\n' + text + '\n\nPlease copy it manually.');
             });
-        }
-        
-        function confirmClearLog() {
-            if (confirm('⚠️ Are you sure you want to clear the entry log?\n\nThis will delete ALL entries from ThingSpeak!\n\nThis action CANNOT be undone!')) {
-                if (confirm('Final confirmation: Delete all ' + allFeeds.length + ' entries?')) {
-                    clearLog();
-                }
-            }
-        }
-        
-        function clearLog() {
-            alert('⚠️ Note: Clearing ThingSpeak data requires API access.\n\nTo clear the log:\n1. Go to ThingSpeak channel\n2. Click "Data Import/Export"\n3. Scroll to "Delete Channel Feed"\n4. Click "Clear Feed"\n\nOr use the ThingSpeak API with DELETE request.');
         }
     </script>
 </body>
