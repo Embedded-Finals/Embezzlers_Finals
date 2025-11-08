@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flood Control - RFID Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            padding: 20px;
+            margin: 0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+        
+        .info {
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .info p {
+            margin: 5px 0;
+        }
+        
+        .refresh-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .refresh-btn:hover {
+            background-color: #45a049;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th {
+            background-color: #3a3a3a;
+            color: #4CAF50;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #3a3a3a;
+        }
+        
+        tr:hover {
+            background-color: #333333;
+        }
+        
+        .employee {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .citizen {
+            color: #2196F3;
+            font-weight: bold;
+        }
+        
+        .unauthorized {
+            color: #f44336;
+            font-weight: bold;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #4CAF50;
+        }
+        
+        .error {
+            background-color: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌊 Flood Control System - RFID Access Data</h1>
+        
+        <div class="info">
+            <p><strong>Channel ID:</strong> 3153327</p>
+            <p><strong>Last Updated:</strong> <span id="lastUpdate">Loading...</span></p>
+            <p><strong>Total Entries:</strong> <span id="totalEntries">0</span></p>
+        </div>
+        
+        <button class="refresh-btn" onclick="loadData()">🔄 Refresh Data</button>
+        
+        <div id="errorMessage"></div>
+        <div id="tableContainer">
+            <div class="loading">Loading data...</div>
+        </div>
+    </div>
+
+    <script>
+        const channelID = '3153327';
+        const readAPIKey = '2K6TQY12XFNV8JD0';
+        const resultsCount = 50; // Number of recent entries to display
+        
+        // Load data when page loads
+        window.onload = function() {
+            loadData();
+            // Auto-refresh every 30 seconds
+            setInterval(loadData, 30000);
+        };
+        
+        function loadData() {
+            const url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=${resultsCount}`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    displayData(data);
+                })
+                .catch(error => {
+                    document.getElementById('errorMessage').innerHTML = 
+                        `<div class="error">Error loading data: ${error.message}</div>`;
+                });
+        }
+        
+        function displayData(data) {
+            const feeds = data.feeds;
+            const channel = data.channel;
+            
+            // Update info
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
+            document.getElementById('totalEntries').textContent = feeds.length;
+            
+            // Clear error message
+            document.getElementById('errorMessage').innerHTML = '';
+            
+            // Create table
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Entry ID</th>
+                            <th>Date & Time</th>
+                            <th>Access Type</th>
+                            <th>RFID ID</th>
+                            <th>Water Flow Rate</th>
+                            <th>Pump Status</th>
+                            <th>Water Alert</th>
+                            <th>Access Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            // Add data rows (reverse order to show newest first)
+            feeds.reverse().forEach(entry => {
+                const date = new Date(entry.created_at);
+                const accessType = getAccessType(entry.field3);
+                const accessClass = getAccessClass(entry.field3);
+                
+                tableHTML += `
+                    <tr>
+                        <td>${entry.entry_id}</td>
+                        <td>${date.toLocaleString()}</td>
+                        <td class="${accessClass}">${accessType}</td>
+                        <td>${entry.field4 || '-'}</td>
+                        <td>${entry.field1 || '-'}</td>
+                        <td>${entry.field2 || '-'}</td>
+                        <td>${entry.field5 || '-'}</td>
+                        <td>${entry.field6 || '-'}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            document.getElementById('tableContainer').innerHTML = tableHTML;
+        }
+        
+        function getAccessType(fieldValue) {
+            if (fieldValue === '1') return 'EMPLOYEE';
+            if (fieldValue === '2') return 'CITIZEN';
+            if (fieldValue === '0') return 'UNAUTHORIZED';
+            return '-';
+        }
+        
+        function getAccessClass(fieldValue) {
+            if (fieldValue === '1') return 'employee';
+            if (fieldValue === '2') return 'citizen';
+            if (fieldValue === '0') return 'unauthorized';
+            return '';
+        }
+    </script>
+</body>
+</html>
