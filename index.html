@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flood Control - RFID Data</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: Arial, sans-serif;
             background-color: #1a1a1a;
@@ -14,7 +18,7 @@
         }
         
         .container {
-            max-width: 900px;
+            max-width: 1200px;
             margin: 0 auto;
         }
         
@@ -34,7 +38,13 @@
             margin: 5px 0;
         }
         
-        .refresh-btn {
+        .button-group {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .refresh-btn, .clear-btn {
             background-color: #4CAF50;
             color: white;
             border: none;
@@ -42,19 +52,88 @@
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
-            margin-bottom: 20px;
         }
         
         .refresh-btn:hover {
             background-color: #45a049;
         }
         
+        .clear-btn {
+            background-color: #f44336;
+        }
+        
+        .clear-btn:hover {
+            background-color: #da190b;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #3a3a3a;
+        }
+        
+        .tab {
+            background-color: #2a2a2a;
+            color: #888;
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.3s;
+        }
+        
+        .tab:hover {
+            background-color: #333;
+            color: #fff;
+        }
+        
+        .tab.active {
+            background-color: #3a3a3a;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Scrollable container */
+        .table-scroll {
+            max-height: 500px;
+            overflow-y: auto;
+            background-color: #2a2a2a;
+            border-radius: 8px;
+        }
+        
+        .table-scroll::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        .table-scroll::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 8px;
+        }
+        
+        .table-scroll::-webkit-scrollbar-thumb {
+            background: #4CAF50;
+            border-radius: 8px;
+        }
+        
+        .table-scroll::-webkit-scrollbar-thumb:hover {
+            background: #45a049;
+        }
+        
         table {
             width: 100%;
             border-collapse: collapse;
-            background-color: #2a2a2a;
-            border-radius: 8px;
-            overflow: hidden;
         }
         
         th {
@@ -63,6 +142,9 @@
             padding: 12px;
             text-align: left;
             font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
         
         td {
@@ -102,6 +184,30 @@
             border-radius: 5px;
             margin: 20px 0;
         }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .badge-employee {
+            background-color: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+        }
+        
+        .badge-citizen {
+            background-color: rgba(33, 150, 243, 0.2);
+            color: #2196F3;
+        }
     </style>
 </head>
 <body>
@@ -112,26 +218,72 @@
             <p><strong>Channel ID:</strong> 3153327</p>
             <p><strong>Last Updated:</strong> <span id="lastUpdate">Loading...</span></p>
             <p><strong>Total Entries:</strong> <span id="totalEntries">0</span></p>
+            <p><strong>Registered Cards:</strong> <span id="registeredCount">0</span></p>
         </div>
         
-        <button class="refresh-btn" onclick="loadData()">🔄 Refresh Data</button>
+        <div class="button-group">
+            <button class="refresh-btn" onclick="loadData()">🔄 Refresh Data</button>
+            <button class="clear-btn" onclick="confirmClearLog()">🗑️ Clear Entry Log</button>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('entry-log')">📋 Entry Log</button>
+            <button class="tab" onclick="showTab('registered')">✅ Registered Cards</button>
+            <button class="tab" onclick="showTab('unregistered')">❌ Unregistered Cards</button>
+        </div>
         
         <div id="errorMessage"></div>
-        <div id="tableContainer">
-            <div class="loading">Loading data...</div>
+        
+        <!-- Tab 1: Entry Log -->
+        <div id="entry-log" class="tab-content active">
+            <div class="table-scroll">
+                <div id="entryLogContent" class="loading">Loading data...</div>
+            </div>
+        </div>
+        
+        <!-- Tab 2: Registered Cards -->
+        <div id="registered" class="tab-content">
+            <div class="table-scroll">
+                <div id="registeredContent" class="loading">Loading data...</div>
+            </div>
+        </div>
+        
+        <!-- Tab 3: Unregistered Cards -->
+        <div id="unregistered" class="tab-content">
+            <div class="table-scroll">
+                <div id="unregisteredContent" class="loading">Loading data...</div>
+            </div>
         </div>
     </div>
 
     <script>
         const channelID = '3153327';
         const readAPIKey = '2K6TQY12XFNV8JD0';
-        const resultsCount = 50;
+        const resultsCount = 100;
+        
+        let allFeeds = [];
         
         window.onload = function() {
             loadData();
-            // Auto-refresh every 15 seconds
             setInterval(loadData, 15000);
         };
+        
+        function showTab(tabName) {
+            // Hide all tabs
+            const tabs = document.querySelectorAll('.tab-content');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Remove active class from all tab buttons
+            const tabButtons = document.querySelectorAll('.tab');
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+        }
         
         function loadData() {
             const url = `https://api.thingspeak.com/channels/${channelID}/feeds.json?api_key=${readAPIKey}&results=${resultsCount}`;
@@ -139,7 +291,8 @@
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
-                    displayData(data);
+                    allFeeds = data.feeds.filter(entry => entry.field3 && entry.field3 !== '');
+                    displayData();
                 })
                 .catch(error => {
                     document.getElementById('errorMessage').innerHTML = 
@@ -147,14 +300,17 @@
                 });
         }
         
-        function displayData(data) {
-            const feeds = data.feeds;
-            
+        function displayData() {
             document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
-            document.getElementById('totalEntries').textContent = feeds.length;
+            document.getElementById('totalEntries').textContent = allFeeds.length;
             document.getElementById('errorMessage').innerHTML = '';
             
-            // Create table with only 4 columns
+            displayEntryLog();
+            displayRegisteredCards();
+            displayUnregisteredCards();
+        }
+        
+        function displayEntryLog() {
             let tableHTML = `
                 <table>
                     <thead>
@@ -168,7 +324,9 @@
                     <tbody>
             `;
             
-            feeds.reverse().forEach(entry => {
+            const reversedFeeds = [...allFeeds].reverse();
+            
+            reversedFeeds.forEach(entry => {
                 const date = new Date(entry.created_at);
                 const accessType = getAccessType(entry.field3);
                 const accessClass = getAccessClass(entry.field3);
@@ -188,7 +346,145 @@
                 </table>
             `;
             
-            document.getElementById('tableContainer').innerHTML = tableHTML;
+            document.getElementById('entryLogContent').innerHTML = tableHTML;
+        }
+        
+        function displayRegisteredCards() {
+            const registeredCards = {};
+            
+            allFeeds.forEach(entry => {
+                if (entry.field3 === '1' || entry.field3 === '2') {
+                    const cardID = entry.field4;
+                    const accessType = entry.field3;
+                    
+                    if (!registeredCards[cardID]) {
+                        registeredCards[cardID] = {
+                            type: accessType,
+                            lastSeen: entry.created_at,
+                            count: 0
+                        };
+                    }
+                    registeredCards[cardID].count++;
+                    
+                    if (new Date(entry.created_at) > new Date(registeredCards[cardID].lastSeen)) {
+                        registeredCards[cardID].lastSeen = entry.created_at;
+                        registeredCards[cardID].type = accessType;
+                    }
+                }
+            });
+            
+            document.getElementById('registeredCount').textContent = Object.keys(registeredCards).length;
+            
+            if (Object.keys(registeredCards).length === 0) {
+                document.getElementById('registeredContent').innerHTML = 
+                    '<div class="empty-state">No registered cards yet</div>';
+                return;
+            }
+            
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>RFID ID</th>
+                            <th>Access Type</th>
+                            <th>Last Seen</th>
+                            <th>Access Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            Object.entries(registeredCards).forEach(([cardID, info]) => {
+                const date = new Date(info.lastSeen);
+                const accessType = getAccessType(info.type);
+                const badgeClass = info.type === '1' ? 'badge-employee' : 'badge-citizen';
+                
+                tableHTML += `
+                    <tr>
+                        <td><strong>${cardID}</strong></td>
+                        <td><span class="badge ${badgeClass}">${accessType}</span></td>
+                        <td>${date.toLocaleString()}</td>
+                        <td>${info.count}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            document.getElementById('registeredContent').innerHTML = tableHTML;
+        }
+        
+        function displayUnregisteredCards() {
+            const unregisteredCards = {};
+            
+            allFeeds.forEach(entry => {
+                if (entry.field3 === '0') {
+                    const cardID = entry.field4;
+                    
+                    if (!unregisteredCards[cardID]) {
+                        unregisteredCards[cardID] = {
+                            lastSeen: entry.created_at,
+                            count: 0
+                        };
+                    }
+                    unregisteredCards[cardID].count++;
+                    
+                    if (new Date(entry.created_at) > new Date(unregisteredCards[cardID].lastSeen)) {
+                        unregisteredCards[cardID].lastSeen = entry.created_at;
+                    }
+                }
+            });
+            
+            if (Object.keys(unregisteredCards).length === 0) {
+                document.getElementById('unregisteredContent').innerHTML = 
+                    '<div class="empty-state">No unauthorized access attempts</div>';
+                return;
+            }
+            
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>RFID ID</th>
+                            <th>Last Attempt</th>
+                            <th>Attempt Count</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            Object.entries(unregisteredCards).forEach(([cardID, info]) => {
+                const date = new Date(info.lastSeen);
+                
+                tableHTML += `
+                    <tr>
+                        <td><strong>${cardID}</strong></td>
+                        <td>${date.toLocaleString()}</td>
+                        <td class="unauthorized">${info.count}</td>
+                        <td>
+                            <button onclick="copyToClipboard('ADD_EMPLOYEE:${cardID}')" 
+                                    style="background:#4CAF50; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">
+                                Copy Employee Command
+                            </button>
+                            <button onclick="copyToClipboard('ADD_CITIZEN:${cardID}')" 
+                                    style="background:#2196F3; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; margin-left:5px;">
+                                Copy Citizen Command
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            document.getElementById('unregisteredContent').innerHTML = tableHTML;
         }
         
         function getAccessType(fieldValue) {
@@ -203,6 +499,24 @@
             if (fieldValue === '2') return 'citizen';
             if (fieldValue === '0') return 'unauthorized';
             return '';
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Command copied! Paste it in TalkBack:\n' + text);
+            });
+        }
+        
+        function confirmClearLog() {
+            if (confirm('⚠️ Are you sure you want to clear the entry log?\n\nThis will delete ALL entries from ThingSpeak!\n\nThis action CANNOT be undone!')) {
+                if (confirm('Final confirmation: Delete all ' + allFeeds.length + ' entries?')) {
+                    clearLog();
+                }
+            }
+        }
+        
+        function clearLog() {
+            alert('⚠️ Note: Clearing ThingSpeak data requires API access.\n\nTo clear the log:\n1. Go to ThingSpeak channel\n2. Click "Data Import/Export"\n3. Scroll to "Delete Channel Feed"\n4. Click "Clear Feed"\n\nOr use the ThingSpeak API with DELETE request.');
         }
     </script>
 </body>
